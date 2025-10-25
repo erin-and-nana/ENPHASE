@@ -45,6 +45,7 @@ import sys
 f_avoid = 3.5 / 372.5 #magic number
 lc_exptime = (29.4) / (60 * 24) #days, see Kepler Data Processing Handbook, Section 3.1
 sc_exptime = (58.8) / (60 * 60 * 24) #days, see Kepler Data Processing Handbook, Section 3.1
+fiducial_bjd = 0 #magic number, placeholder 
 
 def get_kepler_data(kic_id, exptime='long'):
     
@@ -71,6 +72,8 @@ def get_kepler_data(kic_id, exptime='long'):
 
     try:
         search_result = lk.search_lightcurve(kic_id, mission = 'Kepler', exptime=exptime)
+        
+
         if len(search_result) < 1:
             msg = f"get_kepler_data(): no results for {kic_id} at this cadence"
             print(msg)
@@ -82,7 +85,8 @@ def get_kepler_data(kic_id, exptime='long'):
         print(f"Exception for {kic_id}: get_kepler_data(): lk.search_lightcurve() failed for {kic_id } with {str(e)}")
         update_error_message(kic_id, 'Kepler_long', str(e))
         return np.nan, np.nan, np.nan, np.nan
-        
+    
+   
     try:
         lc_collection = search_result.download_all()
     
@@ -99,6 +103,8 @@ def get_kepler_data(kic_id, exptime='long'):
 
     try:
         lc = lc_collection.stitch()
+        #print("get_kepler_data(): minimum time value", np.min(lc.time.value), np.min(lc.time), lc.time)
+
 
     except lk.LightkurveError as e:
         print(f"LightkurveError for {kic_id}: get_kepler_data(): lc_collection.stitch() failed for {kic_id} with {str(e)}")
@@ -787,12 +793,18 @@ def check_coherence(ts, ys, weights, T, kicID, output_table):
                     pars = weighted_least_squares(A, ys[mask], weights[mask])
                     result[idx][i][0] = pars[1] #a
                     result[idx][i][1] = pars[2] #b
+    
+        output_table.add_columns([all[:,0],  all[:,1]], names = ['Amplitude a', 'Amplitude b'])
+
     except Exception as e:
         print(f"Exception in check_coherence(): {str(e)}")
         update_error_message(kicID, 'Kepler_long', str(e))
         return np.nan, np.nan, np.nan, np.nan
     
-    return all, results[0], results[1], results[2] #all, half, quarter, eighth (+jacknives)
+   
+
+
+    return all, results[0], results[1], results[2], output_table  #all, half, quarter, eighth (+jacknives)
 
 
 def sampling_stats(alls, halves, quartiles, eighths, ts, kicID, output_table):
@@ -994,7 +1006,7 @@ def find_modes_in_star(kicID, plots = False, save = False, inject_rng = None, in
     output_table = output_table[good]
     
     #sharpnesses = sharpness(second_derivatives, refined_power)
-    all, half, quartiles, eighths = check_coherence(t_fit, flux_fit, weight_fit, exptime, kicID, output_table)
+    all, half, quartiles, eighths, output_table = check_coherence(t_fit, flux_fit, weight_fit, exptime, kicID, output_table)
 
     
 
@@ -1142,7 +1154,6 @@ def find_modes_in_star(kicID, plots = False, save = False, inject_rng = None, in
 
 
     output_table.add_column( ([kicID, ] * len(final_freqs)), name = 'KIC', index = 0)
-    print(output_table)
 
     if save:
 
@@ -1262,7 +1273,7 @@ def get_db_connection():
     #     host='localhost',
     #     user='nana',
     #     database='stars_db') this is mysql stuff here
-    return db.connect('delta_scuti_test.db')
+    return db.connect('hpc_test_10_21.db')
 
 def execute_query_and_close(query):
     conn = get_db_connection()
@@ -1383,13 +1394,15 @@ def output_modes_to_db(star_id, dataset_id, output_table):
         frequency = row['frequency']
         region = row['region']
         frequency_region_A = row['frequency in region A']
+        amplitude_a = row['Amplitude a']
+        amplitude_b = row['Amplitude b']
         delta_chi_squared = row['delta chi-squared']
         phase_uncertainty_jackknife = row['phase uncertainty jackknife']
         phase_uncertainty_split = row['phase uncertainty split']
         query = f"""
-        INSERT INTO mode (star_id, dataset_id, frequency, region, frequency_region_A,
+        INSERT INTO mode (star_id, dataset_id, frequency, region, frequency_region_A, amplitude_a, amplitude_b,
                         delta_chi_squared, phase_uncertainty_jackknife, phase_uncertainty_split)
-        VALUES ('{star_id}', '{dataset_id}', {frequency}, '{region}', {frequency_region_A},
+        VALUES ('{star_id}', '{dataset_id}', {frequency}, '{region}', {frequency_region_A}, {amplitude_a}, {amplitude_b},
                 {delta_chi_squared}, {phase_uncertainty_jackknife}, {phase_uncertainty_split});
         """
         cursor.execute(query)
