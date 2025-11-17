@@ -1273,10 +1273,11 @@ def get_db_connection():
     #     host='localhost',
     #     user='nana',
     #     database='stars_db') this is mysql stuff here
-    return db.connect('hpc_test_10_21.db')
+    return db.connect('hpc_test_11_16_small_test2.db')
 
 def execute_query_and_close(query):
     conn = get_db_connection()
+
     cursor = conn.cursor()
     cursor.execute(query)
     conn.commit()
@@ -1325,7 +1326,7 @@ def load_task_table(select_kics = None):
 
     else:
         query = """INSERT into task(star_id, dataset_id) 
-        SELECT star.star_id, dataset.dataset_id FROM star CROSS JOIN dataset;"""
+        SELECT star.star_id, dataset.dataset_id FROM star CROSS JOIN dataset LIMIT 25;"""
     execute_query_and_close(query)
     count_query = "SELECT COUNT(*) FROM task;"
     conn = get_db_connection()
